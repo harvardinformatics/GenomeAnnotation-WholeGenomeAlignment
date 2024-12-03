@@ -1,0 +1,9 @@
+*.code-workspace
+
+tests/evolverMammals-out/*
+!tests/evolverMammals-out/evolverMammals.txt
+
+*.snakemake*
+*__pycache__*
+
+bin/

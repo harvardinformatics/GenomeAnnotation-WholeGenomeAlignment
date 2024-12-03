@@ -15,15 +15,23 @@
 # Gregg Thomas, Spring 2022
 #############################################################################
 
-working_dir: <working_directory>
+# time -p snakemake -p -s cactus_gpu.smk --configfile t-hap-cactus-config.yaml --profile profiles/slurm_profile/ --dryrun
 
-cactus_path: <cactus_path>
+#############################################################################
 
-input_file: <input_file>
+working_dir: /n/holylfs05/LABS/informatics/Users/gthomas/mus-t-haplotype/analysis/01-cactus-all-mask-new-tree/
 
-output_dir: <output_dir>
+cactus_path: /n/holylfs05/LABS/informatics/Users/gthomas/turtles/cactus/cactus_v2.2.0-gpu.sif
 
-tmp_dir: <tmp_dir>
+input_file: /n/holylfs05/LABS/informatics/Users/gthomas/mus-t-haplotype/data/genomes-new-tree.txt
+
+output_dir: /n/holylfs05/LABS/informatics/Users/gthomas/mus-t-haplotype/analysis/01-cactus-all-mask-new-tree/
+
+final_hal: mus-t-haplotype-6.hal
+
+tmp_dir: /n/holylfs05/LABS/informatics/Users/gthomas/tmp/
+
+use_gpu: True
 
 #############################################################################
 
@@ -31,7 +39,7 @@ mask_partition: "gpu"
 mask_gpu: 2
 mask_cpu: 64
 mask_mem: "100g"
-mask_time: "1:00:00"
+mask_time: "24:00:00"
 
 ##########################
 
@@ -77,4 +85,3 @@ maf_mem: "100g"
 maf_time: "24:00:00"
 
 ##########################
-

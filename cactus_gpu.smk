@@ -16,6 +16,7 @@ import cactuslib
 
 # Need to first run the cactus-preprocess script to generate commands and cactus config files:
 # cactus-prepare genomes.txt --outDir turtle-output --outSeqFile turtle-output/turtles.txt --outHal turtle-output/turtles.hal --jobStore jobstore --gpu --defaultCores 32
+# time -p singularity exec --nv --cleanenv ../bin/cactus_v2.9.3-gpu.sif cactus-prepare evolverMammals.txt --outDir evolverMammals-out/ --outHal evolverMammals-out/evolverMammals.hal --gpu
 
 # Run snakemake
 # snakemake -p -s cactus_gpu.smk --configfile turtle-cfg.yaml --profile profiles/slurm_profile/ --dryrun
@@ -97,7 +98,7 @@ CACTUS_FILE = os.path.join(OUTPUT_DIR, os.path.basename(INPUT_FILE));
 # The final hal file generated on the root node -- currently still encoded as Anc00.hal
 
 if config["use_gpu"]:
-    GPU_OPT = "--gpu";
+    GPU_OPT = "--gpu " + str(config["mask_gpu"]);
 else:
     GPU_OPT = "";
 
@@ -172,6 +173,8 @@ internal_nodes = [ n for n in tinfo if tinfo[n][2] != 'tip' ];
 root_name = tinfo[root][3];
 ## Parse the tree with the internal node labels
 
+tip_list = list(tips.keys());
+
 ####################
 
 for node in internal_nodes:
@@ -187,36 +190,56 @@ for node in internal_nodes:
 for node in internal_nodes:
     name = tinfo[node][3];
     # Get the name of the current node
+    #print(node, name, tinfo[node]);
 
     expected_seq_inputs = [];
     # We will construct a list of all sequences required as input for this node -- all those
     # from nodes in the previous round
 
-    if internals[name]['round'] == 0:
-    # If the node is in round 0, both of its descendants are tip nodes and the inputs are those
-    # from the mask rule for those sequences
+    cur_desc = cactuslib.getDesc(node, tinfo);
+    # Get descendant nodes for the current node
 
-        cur_desc = cactuslib.getDesc(node, tinfo);
-        # Get descendant nodes for the current node
+    for tip in tips:
+        expected_seq_inputs.append(tips[tip]['output']);
 
-        for desc in cur_desc:
-            #expected_seq_inputs.append([ desc_key for desc_key in tips if tips[desc_key]['name'] == desc ][0]);
-            expected_seq_inputs.append(tips[desc]['output']);
-        # Get the output of the mask rule for both descendants as the inputs for this node
-
-    else:
-    # If the node is not in round 0, we need to gather all output sequences from the previous round
-    # as input to this node
-
+    if not all(tinfo[desc][2] == "tip" for desc in cur_desc):
         for node_check in internal_nodes:
             name_check = tinfo[node_check][3];
+            #print(node, name, node_check, name_check)
             if internals[name]['round']-1 != internals[name_check]['round']:
                 continue;
             expected_seq_inputs.append(internals[name_check]['seq-file']);
-        # Go through the internal nodes again and skip any that aren't in the previous round
+            # Go through the internal nodes again and skip any that aren't in the previous round  
+    # I think this is better, because it makes sure all tips are done too... but it probably doesn't make a difference          
+
+    # if internals[name]['round'] == 0:
+    # # If the node is in round 0, both of its descendants are tip nodes and the inputs are those
+    # # from the mask rule for those sequences
+
+    #     cur_desc = cactuslib.getDesc(node, tinfo);
+    #     # Get descendant nodes for the current node
+
+    #     #print(node, name, cur_desc);
+
+    #     for desc in cur_desc:
+    #         #expected_seq_inputs.append([ desc_key for desc_key in tips if tips[desc_key]['name'] == desc ][0]);
+    #         expected_seq_inputs.append(tips[desc]['output']);
+    #     # Get the output of the mask rule for both descendants as the inputs for this node
+
+    # else:
+    # # If the node is not in round 0, we need to gather all output sequences from the previous round
+    # # as input to this node
+
+    #     for node_check in internal_nodes:
+    #         name_check = tinfo[node_check][3];
+    #         #print(node, name, node_check, name_check)
+    #         if internals[name]['round']-1 != internals[name_check]['round']:
+    #             continue;
+    #         expected_seq_inputs.append(internals[name_check]['seq-file']);
+    #     # Go through the internal nodes again and skip any that aren't in the previous round
 
     internals[name]['input-seqs'] = expected_seq_inputs;
-     # Add the expected input seqs to the main internals dict for this node       
+    # Add the expected input seqs to the main internals dict for this node       
 ## Another loop through the tree to get the input sequences for each node
 
 if debug:
@@ -229,6 +252,11 @@ if debug:
     print("===================================================================================");
     for name in tips:
         print(name, tips[name]['output']);
+
+    #print(tip_list);
+    #print([tips[name]['output'] for name in tips]);
+    print([node for node in internals]);
+    #print(expand(os.path.join(OUTPUT_DIR, "{internal_node}.fa"), internal_node=[node for node in internals]))
     sys.exit("debug ok");
 ## Some output for debugging
 
@@ -244,10 +272,10 @@ rule all:
         # The masked input files from rule mask
 
         expand(os.path.join(OUTPUT_DIR, "{internal_node}.fa"), internal_node=[node for node in internals]),
-        # The final FASTA sequences from each internal node after rules blast and align
+        # The final FASTA sequences from each internal node after rules blast, align, and convert
 
         os.path.join(OUTPUT_DIR, "hal-append-subtree.log"),
-        # The log file from the append rule (halAppendSubtree)
+        # The log file from the append rule (halAppendSubtree)    
 
         #OUTPUT_MAF
         #os.path.join(OUTPUT_DIR, root_name + ".maf")
@@ -263,33 +291,31 @@ rule mask:
     input:
         lambda wildcards: [ tips[name]['input'] for name in tips if tips[name]['output'] == wildcards.final_tip ][0]
     output:
-        os.path.join(OUTPUT_DIR, "{final_tip}")
+        os.path.join(OUTPUT_DIR, "{final_tip}")    
     params:
         path = CACTUS_PATH,
         input_file = INPUT_FILE,
-        #config_file = os.path.join(OUTPUT_DIR, CONFIG_FILE),
         cactus_file = os.path.join(OUTPUT_DIR, CACTUS_FILE),
-        genome_name = lambda wildcards: [ name for name in tips if tips[name]['output'] == wildcards.final_tip ][0],#  tips[wildcards.final_tip]['name'],
-        #job_dir = lambda wildcards: os.path.join(TMPDIR, tips[wildcards.final_tip]['name'] + "-mask")
+        genome_name = lambda wildcards: [ name for name in tips if tips[name]['output'] == wildcards.final_tip ][0],
         job_dir = lambda wildcards: os.path.join(TMPDIR, [ name for name in tips if tips[name]['output'] == wildcards.final_tip ][0] + "-mask"),
         gpu_opt = GPU_OPT
     resources:
-        partition = config["mask_partition"],
-        gpu = config["mask_gpu"],
-        cpus = config["mask_cpu"],
-        mem = config["mask_mem"],
-        time = config["mask_time"]
-    run:
-        if os.path.isdir(params.job_dir):
-            shell("{params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --realTimeLogging --logInfo --retryCount 0 --maxCores {resources.cpus} {params.gpu_opt} --restart")
-        else:
-            shell("{params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --realTimeLogging --logInfo --retryCount 0 --maxCores {resources.cpus} {params.gpu_opt}")
-        # When not requesting all CPU on a node: toil.batchSystems.abstractBatchSystem.InsufficientSystemResources: The job LastzRepeatMaskJob is requesting 64.0 cores, more than the maximum of 32 cores that SingleMachineBatchSystem was configured with, or enforced by --maxCores.Scale is set to 1.0.
-
+        slurm_partition = config["mask_partition"],
+        cpus_per_task = config["mask_cpu"],
+        mem_mb = config["mask_mem"],
+        runtime = config["mask_time"],
+        slurm_extra = "'--gres=gpu:" + str(config["mask_gpu"]) + "'"
     # shell:
     #     """
-    #     {params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --realTimeLogging --logInfo --retryCount 0 --maxCores {resources.cpus} {params.gpu_opt}
+    #     {params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --realTimeLogging true --logInfo --retryCount 0 --maxCores {resources.cpus_per_task} {params.gpu_opt}
     #     """
+    run:
+        if os.path.isdir(params.job_dir):
+            shell("{params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --logInfo --retryCount 0 --maxCores {resources.cpus_per_task} {params.gpu_opt}  --restart")
+        else:
+            shell("{params.path} cactus-preprocess {params.job_dir} {params.input_file} {params.cactus_file} --inputNames {params.genome_name} --logInfo --retryCount 0 --maxCores {resources.cpus_per_task} {params.gpu_opt} ")
+        # When not requesting all CPU on a node: toil.batchSystems.abstractBatchSystem.InsufficientSystemResources: The job LastzRepeatMaskJob is requesting 64.0 cores, more than the maximum of 32 cores that SingleMachineBatchSystem was configured with, or enforced by --maxCores.Scale is set to 1.0.
+
 ## This rule runs cactus-preprocess for every genome (tip in the tree), which does some masking
 ## Runtimes for turtles range from 8 to 15 minutes with the above resoureces
 
@@ -309,16 +335,22 @@ rule blast:
         job_dir = lambda wildcards: os.path.join("/tmp", wildcards.internal_node + "-blast"),
         gpu_opt = GPU_OPT
     resources:
-        partition = config["blast_partition"],
-        gpu = config["blast_gpu"],
-        cpus = config["blast_cpu"],
-        mem = config["blast_mem"],
-        time = config["blast_time"]
+        slurm_partition = config["blast_partition"],
+        cpus_per_task = config["blast_cpu"],
+        mem_mb = config["blast_mem"],
+        runtime = config["blast_time"],
+        slurm_extra = "'--gres=gpu:" + str(config["blast_gpu"]) + "'"
+    # wildcard_constraints:
+    #     internal_node = "Anc*"
+    # shell:
+    #     """
+    #     {params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus} {params.gpu_opt}
+    #     """
     run:
         if os.path.isdir(params.job_dir):
-            shell("{params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --realTimeLogging --logInfo --retryCount 0 --maxCores {resources.cpus} {params.gpu_opt} --restart")
+            shell("hostname; module load cuda; singularity run --nv /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/bin/cactus_v2.9.3-gpu.sif nvidia-smi; {params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt} --restart")
         else:
-            shell("{params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --realTimeLogging --logInfo --retryCount 0 --maxCores {resources.cpus} {params.gpu_opt}")
+            shell("hostname; module load cuda; singularity run --nv /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/bin/cactus_v2.9.3-gpu.sif nvidia-smi; {params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt}")
 ## This rule runs cactus-blast for every internal node
 ## Runtimes for turtles range from 1 to 10 hours with the above resources
 
@@ -337,17 +369,19 @@ rule align:
         node = lambda wildcards: wildcards.internal_node,
         #job_dir = lambda wildcards: os.path.join(TMPDIR, wildcards.internal_node + "-align"),
         job_dir = lambda wildcards: os.path.join("/tmp", wildcards.internal_node + "-align"),
-        work_dir = TMPDIR
+        work_dir = TMPDIR,
+        gpu_opt = GPU_OPT
     resources:
-        partition = config["align_partition"],
-        cpus = config["align_cpu"],
-        mem = config["align_mem"],
-        time = config["align_time"]
+        slurm_partition = config["align_partition"],
+        cpus_per_task = config["align_cpu"],
+        mem_mb = config["align_mem"],
+        runtime = config["align_time"],
+        slurm_extra = "'--gres=gpu:" + str(config["blast_gpu"]) + "'"
     run:
         if os.path.isdir(params.job_dir):
-            shell("{params.path} cactus-align {params.job_dir} {params.cactus_file} {input.cigar_file} {output} --root {params.node} --realTimeLogging --logInfo --retryCount 0 --workDir {params.work_dir} --maxCores {resources.cpus} --defaultDisk 450G --restart")
+            shell("{params.path} cactus-align {params.job_dir} {params.cactus_file} {input.cigar_file} {output} --root {params.node} --logInfo --retryCount 0 --workDir {params.work_dir} --maxCores {resources.cpus_per_task} --defaultDisk 450G --gpu --restart")
         else:
-            shell("{params.path} cactus-align {params.job_dir} {params.cactus_file} {input.cigar_file} {output} --root {params.node} --realTimeLogging --logInfo --retryCount 0 --workDir {params.work_dir} --maxCores {resources.cpus} --defaultDisk 450G ")
+            shell("{params.path} cactus-align {params.job_dir} {params.cactus_file} {input.cigar_file} {output} --root {params.node} --logInfo --retryCount 0 --workDir {params.work_dir} --maxCores {resources.cpus_per_task} --defaultDisk 450G --gpu")
 ## This rule runs cactus-align for every internal node
 ## Runtimes for turtles range from 4 to 16 hours with the above resources
 
@@ -363,9 +397,9 @@ rule convert:
         path = CACTUS_PATH,
         node = lambda wildcards: wildcards.internal_node,
     resources:
-        partition = config["convert_partition"],
-        cpus = config["convert_cpu"],
-        mem = config["convert_mem"],
+        slurm_partition = config["convert_partition"],
+        cpus_per_task = config["convert_cpu"],
+        mem_mb = config["convert_mem"],
         time = config["convert_time"]
     shell:
         """
@@ -383,10 +417,10 @@ rule copy_hal:
     output:
         OUTPUT_HAL
     resources:
-        partition = config["copy_partition"],
-        cpus = config["copy_cpu"],
-        mem = config["copy_mem"],
-        time = config["copy_time"]    
+        slurm_partition = config["copy_partition"],
+        cpus_per_task = config["copy_cpu"],
+        mem_mb = config["copy_mem"],
+        runtime = config["copy_time"]    
     shell:
         """
         cp {input.anc_hal} {output}
@@ -404,10 +438,10 @@ rule append:
     output:
         touch(os.path.join(OUTPUT_DIR, "hal-append-subtree.log"))
     resources:
-        partition = config["append_partition"],
-        cpus = config["append_cpu"],
-        mem = config["append_mem"],
-        time = config["append_time"]
+        slurm_partition = config["append_partition"],
+        cpus_per_task = config["append_cpu"],
+        mem_mb = config["append_mem"],
+        runtime = config["append_time"]
     run:
         with open(os.path.join(OUTPUT_DIR, "hal-append-subtree.log"), "w") as appendfile:
             for node in internals:
@@ -457,10 +491,10 @@ rule maf:
     params:
         path = CACTUS_PATH_TMP
     resources:
-        partition = config["maf_partition"],
-        cpus = config["maf_cpu"],
-        mem = config["maf_mem"],
-        time = config["maf_time"]
+        slurm_partition = config["maf_partition"],
+        cpus_per_task = config["maf_cpu"],
+        mem_mb = config["maf_mem"],
+        runtime = config["maf_time"]
         # {params.path} hal2mafMP.py --numProc {resources.cpus} {input.final_hal} {output}
     shell:
         """

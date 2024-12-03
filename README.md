@@ -172,3 +172,6 @@ With the `--dryrun` option, this command will run through the pipeline without e
 
 We also recommend running the pipeline script itself using a [terminal multiplexer](https://en.wikipedia.org/wiki/Terminal_multiplexer) or submitting it as a job to your cluster so that it won't be interrupted.
 
+# Troubleshooting
+
+1. For some reason, snakemake dislikes when the extension of the input sequences is `.fa`. I think this is because the output of the ancestral sequences is also `.fa` and it looks for that pattern in the wildcards... Possibly similar to the case discussed here: https://www.embl.org/groups/bioinformatics-rome/blog/2022/10/an-example-of-what-the-hell-error-in-snakemake/ 

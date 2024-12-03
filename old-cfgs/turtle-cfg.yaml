@@ -13,6 +13,8 @@ final_hal: "turtles.hal"
 
 tmp_dir: /n/holylfs05/LABS/informatics/Users/gthomas/tmp/
 
+use_gpu: True
+
 ##########################
 
 mask_partition: "gpu"
