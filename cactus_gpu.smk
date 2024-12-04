@@ -348,9 +348,9 @@ rule blast:
     #     """
     run:
         if os.path.isdir(params.job_dir):
-            shell("hostname; module load cuda; singularity run --nv /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/bin/cactus_v2.9.3-gpu.sif nvidia-smi; {params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt} --restart")
+            shell("{params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt} --restart")
         else:
-            shell("hostname; module load cuda; singularity run --nv /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/bin/cactus_v2.9.3-gpu.sif nvidia-smi; {params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt}")
+            shell("{params.path} cactus-blast {params.job_dir} {params.cactus_file} {output} --root {params.node} --logInfo --retryCount 0 --lastzCores {resources.cpus_per_task} {params.gpu_opt}")
 ## This rule runs cactus-blast for every internal node
 ## Runtimes for turtles range from 1 to 10 hours with the above resources
 

@@ -10,26 +10,32 @@
 # input_file: <input_file>
 # input_file: /path/to/my/input/file.txt
 #
-# For working_dir, I prefer to make this one directory above my output_dir
-#
 # Gregg Thomas, Spring 2022
 #############################################################################
 
-# time -p snakemake -p -s cactus_gpu.smk --configfile mammals-cfg.yaml --profile profiles/slurm_profile/ --dryrun
+# time -p singularity exec --nv --cleanenv ../bin/cactus_v2.9.3-gpu.sif cactus-prepare evolverMammals.txt --outDir evolverMammals-out/ --outHal evolverMammals-out/evolverMammals.hal --gpu
+## Note: this needs to be run in the tests/ directory so the new evolverMammals-out/evolverMammals.txt file has the correct paths.
+
+# time -p snakemake -p -s cactus_gpu.smk --configfile tests/evolverMammals-cfg.yaml --profile profiles/slurm_profile/ --dryrun
 
 #############################################################################
 
-working_dir: /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/tests
+working_dir: /n/holylfs05/LABS/informatics/Users/gthomas/cactus-snakemake/tests
+# Where the snakemake pipeline will be run. I usually set this one directory above my output directory, though it shouldn't matter.
 
-cactus_path: /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/bin/cactus_v2.9.3-gpu.sif
+cactus_path: /n/holylfs05/LABS/informatics/Users/gthomas/cactus-snakemake/bin/cactus_v2.9.3-gpu.sif
 
-input_file: /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/tests/evolverMammals.txt
+input_file: /n/holylfs05/LABS/informatics/Users/gthomas/cactus-snakemake/tests/evolverMammals.txt
+# Same as input file for cactus-prepare, though a similar file with ancestor genomes should have been created in your output directory
+# when you ran cactus-prepare.
 
-output_dir: /n/holylfs05/LABS/informatics/Users/gthomas/turtles/GenomeAnnotation-WholeGenomeAlignment/tests/evolverMammals-out/
+output_dir: /n/holylfs05/LABS/informatics/Users/gthomas/cactus-snakemake/tests/evolverMammals-out/
 
 final_hal: evolverMammals.hal
+# The name you want for the final HAL file.
 
 tmp_dir: /n/holylfs05/LABS/informatics/Users/gthomas/tmp/
+# A temporary directory for snakemake and cactus to use. Should have lots of space.
 
 use_gpu: True
 
@@ -38,50 +44,50 @@ use_gpu: True
 mask_partition: "gpu"
 mask_gpu: 2
 mask_cpu: 64
-mask_mem: 100000
-mask_time: 60
+mask_mem: 25000
+mask_time: 30
 
 ##########################
 
 blast_partition: "gpu"
 blast_gpu: 4
 blast_cpu: 64
-blast_mem: 200000
-blast_time: 720
+blast_mem: 50000
+blast_time: 120
 
 ##########################
 
 align_partition: "gpu"
 align_cpu: 24
-align_mem: 100000 
-align_time: 1440
+align_mem: 25000 
+align_time: 120
 
 ##########################
 
 convert_partition: "shared"
 convert_cpu: 8
-convert_mem: "8g"
-convert_time: 60
+convert_mem: 8000
+convert_time: 30
 
 ##########################
 
 copy_partition: "shared"
 copy_cpu: 1
 copy_mem: 8000
-copy_time: 60
+copy_time: 30
 
 ##########################
 
 append_partition: "shared"
 append_cpu: 8
 append_mem: 8000
-append_time: 360
+append_time: 30
 
 ##########################
 
 maf_partition: "shared"
 maf_cpu: 8
-maf_mem: 100000
-maf_time: 1440
+maf_mem: 25000
+maf_time: 60
 
 ##########################
